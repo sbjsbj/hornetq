@@ -10,27 +10,15 @@
  * implied.  See the License for the specific language governing
  * permissions and limitations under the License.
  */
-/**
- *
- */
-package org.hornetq.utils;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+package org.hornetq.spi.core.remoting;
 
 /**
- * TODO: get rid of this
+ * This is an empty abstract class where any sub class providing Session information about a protocol would be
+ * down casted by the ClientProtocol implementation to retrieve the protocol needed data
+ * @author Clebert Suconic
  */
-public final class ConfirmationWindowWarning
+
+public interface ClientProtocolSession
 {
-   public final boolean disabled;
-   public final AtomicBoolean warningIssued;
-
-   /**
-    *
-    */
-   public ConfirmationWindowWarning(boolean disabled)
-   {
-      this.disabled = disabled;
-      warningIssued = new AtomicBoolean(false);
-   }
 }

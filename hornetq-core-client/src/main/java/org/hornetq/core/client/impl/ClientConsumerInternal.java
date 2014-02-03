@@ -17,9 +17,6 @@ import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientConsumer;
 import org.hornetq.api.core.client.ClientMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryResponseMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveLargeMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveMessage;
 
 /**
  *
@@ -38,11 +35,11 @@ public interface ClientConsumerInternal extends ClientConsumer
 
    boolean isBrowseOnly();
 
-   void handleMessage(SessionReceiveMessage message) throws Exception;
+   void handleMessage(ClientMessageInternal message) throws Exception;
 
-   void handleLargeMessage(SessionReceiveLargeMessage largeMessageHeader) throws Exception;
+   void handleLargeMessage(ClientLargeMessageInternal clientLargeMessage, long largeMessageSize) throws Exception;
 
-   void handleLargeMessageContinuation(SessionReceiveContinuationMessage continuation) throws Exception;
+   void handleLargeMessageContinuation(byte[] chunk, int flowControlSize, boolean isContinues) throws Exception;
 
    void flowControl(final int messageBytes, final boolean discountSlowConsumer) throws HornetQException;
 

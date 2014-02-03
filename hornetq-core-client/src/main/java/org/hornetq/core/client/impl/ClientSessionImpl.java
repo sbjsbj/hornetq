@@ -36,6 +36,7 @@ import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientConsumer;
 import org.hornetq.api.core.client.ClientMessage;
 import org.hornetq.api.core.client.ClientProducer;
+import org.hornetq.api.core.client.ClientSessionFactory;
 import org.hornetq.api.core.client.FailoverEventListener;
 import org.hornetq.api.core.client.SendAcknowledgementHandler;
 import org.hornetq.api.core.client.SessionFailureListener;
@@ -45,6 +46,7 @@ import org.hornetq.core.protocol.core.Channel;
 import org.hornetq.core.protocol.core.CommandConfirmationHandler;
 import org.hornetq.core.protocol.core.CoreRemotingConnection;
 import org.hornetq.core.protocol.core.Packet;
+import org.hornetq.core.protocol.core.impl.HornetQSessionContext;
 import org.hornetq.core.protocol.core.impl.PacketImpl;
 import org.hornetq.core.protocol.core.impl.wireformat.CreateQueueMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.CreateSessionMessage;
@@ -65,9 +67,6 @@ import org.hornetq.core.protocol.core.impl.wireformat.SessionForceConsumerDelive
 import org.hornetq.core.protocol.core.impl.wireformat.SessionIndividualAcknowledgeMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryResponseMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveLargeMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionRequestProducerCreditsMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionSendContinuationMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionSendMessage;
@@ -89,6 +88,7 @@ import org.hornetq.core.protocol.core.impl.wireformat.SessionXAStartMessage;
 import org.hornetq.core.remoting.FailureListener;
 import org.hornetq.spi.core.protocol.RemotingConnection;
 import org.hornetq.spi.core.remoting.Connection;
+import org.hornetq.spi.core.remoting.SessionContext;
 import org.hornetq.utils.ConfirmationWindowWarning;
 import org.hornetq.utils.IDGenerator;
 import org.hornetq.utils.SimpleIDGenerator;
@@ -121,7 +121,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
    // to be sent to consumers as consumers will need a separate consumer for flow control
    private final Executor flowControlExecutor;
 
-   private volatile CoreRemotingConnection remotingConnection;
+   private volatile RemotingConnection remotingConnection;
 
    /**
     * All access to producers are guarded (i.e. synchronized) on itself.
@@ -165,8 +165,12 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
    private final boolean cacheLargeMessageClient;
 
+   private final SessionContext sessionContext;
+
+   // TODO remove this and set over encapsulation on the protocol
    private final Channel channel;
 
+   // TODO remove this and set over encapsulation on the protocol
    private final int version;
 
    // For testing only
@@ -227,9 +231,8 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
                      final boolean compressLargeMessages,
                      final int initialMessagePacketSize,
                      final String groupID,
-                     final CoreRemotingConnection remotingConnection,
-                     final int version,
-                     final Channel channel,
+                     final RemotingConnection remotingConnection,
+                     final SessionContext sessionContext,
                      final Executor executor,
                      final Executor flowControlExecutor) throws HornetQException
    {
@@ -259,10 +262,6 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
       this.autoGroup = autoGroup;
 
-      this.channel = channel;
-
-      this.version = version;
-
       this.ackBatchSize = ackBatchSize;
 
       this.consumerWindowSize = consumerWindowSize;
@@ -288,6 +287,14 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       this.groupID = groupID;
 
       producerCreditManager = new ClientProducerCreditManagerImpl(this, producerWindowSize);
+
+      this.sessionContext = sessionContext;
+
+      // TODO encpasulate these three lines over protocol
+      HornetQSessionContext hqctx = (HornetQSessionContext)sessionContext;
+      this.version = hqctx.getServerVersion();
+      this.channel = hqctx.getSessionChannel();
+
       if (confirmationWindowSize >= 0)
       {
          this.channel.setCommandConfirmationHandler(this);
@@ -939,39 +946,33 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       }
    }
 
-   public void handleReceiveMessage(final long consumerID, final SessionReceiveMessage message) throws Exception
+   public void handleReceiveMessage(final long consumerID, final ClientMessageInternal message) throws Exception
    {
       ClientConsumerInternal consumer = getConsumer(consumerID);
 
       if (consumer != null)
       {
-         ClientMessageInternal clMessage = (ClientMessageInternal) message.getMessage();
-
-         clMessage.setDeliveryCount(message.getDeliveryCount());
-
-         clMessage.setFlowControlSize(message.getPacketSize());
-
          consumer.handleMessage(message);
       }
    }
 
-   public void handleReceiveLargeMessage(final long consumerID, final SessionReceiveLargeMessage message) throws Exception
+   public void handleReceiveLargeMessage(final long consumerID, ClientLargeMessageInternal clientLargeMessage, long largeMessageSize) throws Exception
    {
       ClientConsumerInternal consumer = getConsumer(consumerID);
 
       if (consumer != null)
       {
-         consumer.handleLargeMessage(message);
+         consumer.handleLargeMessage(clientLargeMessage, largeMessageSize);
       }
    }
 
-   public void handleReceiveContinuation(final long consumerID, final SessionReceiveContinuationMessage continuation) throws Exception
+   public void handleReceiveContinuation(final long consumerID, byte[] chunk, int flowControlSize, boolean isContinues) throws Exception
    {
       ClientConsumerInternal consumer = getConsumer(consumerID);
 
       if (consumer != null)
       {
-         consumer.handleLargeMessageContinuation(continuation);
+         consumer.handleLargeMessageContinuation(chunk, flowControlSize, isContinues);
       }
    }
 
@@ -1056,7 +1057,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       sendAckHandler = handler;
    }
 
-   public void preHandleFailover(CoreRemotingConnection connection)
+   public void preHandleFailover(RemotingConnection connection)
    {
       // We lock the channel to prevent any packets to be added to the re-send
       // cache during the failover process
@@ -1066,7 +1067,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
    // Needs to be synchronized to prevent issues with occurring concurrently with close()
 
-   public void handleFailover(final CoreRemotingConnection backupConnection)
+   public void handleFailover(final RemotingConnection backupConnection)
    {
       synchronized (this)
       {
@@ -1079,9 +1080,10 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
          try
          {
-            channel.transferConnection(backupConnection);
+            // TODO remove this and encapsulate it
+            channel.transferConnection((CoreRemotingConnection)backupConnection);
 
-            backupConnection.syncIDGeneratorSequence(remotingConnection.getIDGeneratorSequence());
+            ((CoreRemotingConnection)backupConnection).syncIDGeneratorSequence(((CoreRemotingConnection) remotingConnection).getIDGeneratorSequence());
 
             remotingConnection = backupConnection;
 
@@ -1089,7 +1091,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
             Packet request = new ReattachSessionMessage(name, lcid);
 
-            Channel channel1 = backupConnection.getChannel(1, -1);
+            Channel channel1 = ((CoreRemotingConnection)backupConnection).getChannel(1, -1);
 
             ReattachSessionResponseMessage response = (ReattachSessionResponseMessage) channel1.sendBlocking(request, PacketImpl.REATTACH_SESSION_RESP);
 
@@ -1305,7 +1307,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       channel.sendBlocking(new SessionUniqueAddMetaDataMessage(key, data), PacketImpl.NULL_RESPONSE);
    }
 
-   public ClientSessionFactoryInternal getSessionFactory()
+   public ClientSessionFactory getSessionFactory()
    {
       return sessionFactory;
    }
