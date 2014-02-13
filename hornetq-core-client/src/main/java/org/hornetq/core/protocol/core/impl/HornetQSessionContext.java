@@ -23,6 +23,8 @@ import org.hornetq.core.protocol.core.ChannelHandler;
 import org.hornetq.core.protocol.core.Packet;
 import org.hornetq.core.protocol.core.impl.wireformat.DisconnectConsumerMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.HornetQExceptionMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionConsumerCloseMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionConsumerFlowCreditMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionProducerCreditsFailMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionProducerCreditsMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
@@ -67,11 +69,15 @@ public class HornetQSessionContext extends SessionContext
    }
 
    @Override
-   public void closeConsumer(final ClientConsumer consumer)
+   public void closeConsumer(final ClientConsumer consumer) throws HornetQException
    {
-
+      sessionChannel.sendBlocking(new SessionConsumerCloseMessage((long)consumer.getId()), PacketImpl.NULL_RESPONSE);
    }
 
+   public void sendConsumerCredits(final ClientConsumer consumer, final int credits)
+   {
+      sessionChannel.send(new SessionConsumerFlowCreditMessage((long)consumer.getId(), credits));
+   }
 
    /**
     * This doesn't apply to other protocols probably, so it will be a hornetq exclusive feature

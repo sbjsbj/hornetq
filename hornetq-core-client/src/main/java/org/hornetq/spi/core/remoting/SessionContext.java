@@ -13,6 +13,7 @@
 
 package org.hornetq.spi.core.remoting;
 
+import org.hornetq.api.core.HornetQException;
 import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientConsumer;
 import org.hornetq.core.client.impl.ClientLargeMessageInternal;
@@ -39,7 +40,9 @@ public abstract class SessionContext
    }
 
 
-   public abstract void closeConsumer(ClientConsumer consumer);
+   public abstract void closeConsumer(ClientConsumer consumer) throws HornetQException;
+
+   public abstract void sendConsumerCredits(ClientConsumer consumer, int credits);
 
    /**
     * TODO: Move this to ConsumerContext
@@ -104,7 +107,5 @@ public abstract class SessionContext
       }
 
    }
-
-
 
 }

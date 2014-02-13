@@ -31,12 +31,9 @@ import org.hornetq.api.core.client.MessageHandler;
 import org.hornetq.api.core.client.ServerLocator;
 import org.hornetq.core.client.HornetQClientLogger;
 import org.hornetq.core.client.HornetQClientMessageBundle;
-import org.hornetq.core.protocol.core.Channel;
-import org.hornetq.core.protocol.core.impl.PacketImpl;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionConsumerCloseMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionConsumerFlowCreditMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryResponseMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
+import org.hornetq.spi.core.remoting.SessionContext;
 import org.hornetq.utils.FutureLatch;
 import org.hornetq.utils.PriorityLinkedList;
 import org.hornetq.utils.PriorityLinkedListImpl;
@@ -69,7 +66,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
    private final ClientSessionInternal session;
 
-   private final Channel channel;
+   private final SessionContext sessionContext;
 
    private final long id;
 
@@ -150,7 +147,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
                              final TokenBucketLimiter rateLimiter,
                              final Executor executor,
                              final Executor flowControlExecutor,
-                             final Channel channel,
+                             final SessionContext sessionContext,
                              final SessionQueueQueryResponseMessage queueInfo,
                              final ClassLoader contextClassLoader)
    {
@@ -162,7 +159,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
       this.browseOnly = browseOnly;
 
-      this.channel = channel;
+      this.sessionContext = sessionContext;
 
       this.session = session;
 
@@ -183,6 +180,11 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
    // ClientConsumer implementation
    // -----------------------------------------------------------------
+
+   public Object getId()
+   {
+      return id;
+   }
 
    private ClientMessage receive(final long timeout, final boolean forcingDelivery) throws HornetQException
    {
@@ -983,7 +985,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
          {
             try
             {
-               channel.send(new SessionConsumerFlowCreditMessage(id, credits));
+               sessionContext.sendConsumerCredits(ClientConsumerImpl.this, credits);
             }
             finally
             {
@@ -1194,7 +1196,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
          if (sendCloseMessage)
          {
-            channel.sendBlocking(new SessionConsumerCloseMessage(id), PacketImpl.NULL_RESPONSE);
+            sessionContext.closeConsumer(this);
          }
       }
       catch (Throwable t)

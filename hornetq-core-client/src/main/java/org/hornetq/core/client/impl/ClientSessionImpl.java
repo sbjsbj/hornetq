@@ -2002,7 +2002,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
                                                                   : null,
                                                                executor,
                                                                flowControlExecutor,
-                                                               channel,
+                                                               sessionContext,
                                                                queueInfo,
                                                                lookupTCCL());
 
