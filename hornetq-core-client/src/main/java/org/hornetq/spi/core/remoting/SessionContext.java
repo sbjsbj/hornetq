@@ -13,12 +13,19 @@
 
 package org.hornetq.spi.core.remoting;
 
+import org.hornetq.api.core.HornetQBuffer;
 import org.hornetq.api.core.HornetQException;
 import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientConsumer;
+import org.hornetq.api.core.client.SendAcknowledgementHandler;
 import org.hornetq.core.client.impl.ClientLargeMessageInternal;
 import org.hornetq.core.client.impl.ClientMessageInternal;
 import org.hornetq.core.client.impl.ClientSessionInternal;
+import org.hornetq.core.message.impl.MessageInternal;
+import org.hornetq.core.protocol.core.impl.PacketImpl;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendContinuationMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendLargeMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendMessage;
 
 /**
  * @author Clebert Suconic
@@ -43,6 +50,8 @@ public abstract class SessionContext
    public abstract void closeConsumer(ClientConsumer consumer) throws HornetQException;
 
    public abstract void sendConsumerCredits(ClientConsumer consumer, int credits);
+
+   public abstract boolean supportsLargeMessage();
 
    /**
     * TODO: Move this to ConsumerContext
@@ -107,5 +116,21 @@ public abstract class SessionContext
       }
 
    }
+
+   public abstract int getCreditsOnSendingFull(MessageInternal msgI);
+
+   public abstract void sendFullMessage(MessageInternal msgI, boolean sendBlocking, SendAcknowledgementHandler handler) throws HornetQException;
+
+   /**
+    * it should return the number of credits (or bytes) used to send this packet
+    * @param msgI
+    * @return
+    * @throws HornetQException
+    */
+   public abstract int sendInitialChunkOnLargeMessage(MessageInternal msgI) throws HornetQException;
+
+
+   public abstract int sendLargeMessageChunk(MessageInternal msgI, long messageBodySize, boolean sendBlocking, boolean lastChunk, byte[] chunk, SendAcknowledgementHandler messageHandler) throws HornetQException;
+
 
 }

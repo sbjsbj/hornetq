@@ -770,6 +770,12 @@ public class LargeMessageBufferTest extends UnitTestCase
    static class FakeConsumerInternal implements ClientConsumerInternal
    {
 
+      public Object getId()
+      {
+         return this;
+      }
+
+
       public void close() throws HornetQException
       {
       }

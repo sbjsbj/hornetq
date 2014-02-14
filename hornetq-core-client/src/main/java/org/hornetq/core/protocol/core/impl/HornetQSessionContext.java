@@ -13,11 +13,14 @@
 
 package org.hornetq.core.protocol.core.impl;
 
+import org.hornetq.api.core.HornetQBuffer;
 import org.hornetq.api.core.HornetQException;
 import org.hornetq.api.core.client.ClientConsumer;
+import org.hornetq.api.core.client.SendAcknowledgementHandler;
 import org.hornetq.core.client.HornetQClientLogger;
 import org.hornetq.core.client.impl.ClientLargeMessageInternal;
 import org.hornetq.core.client.impl.ClientMessageInternal;
+import org.hornetq.core.message.impl.MessageInternal;
 import org.hornetq.core.protocol.core.Channel;
 import org.hornetq.core.protocol.core.ChannelHandler;
 import org.hornetq.core.protocol.core.Packet;
@@ -30,6 +33,9 @@ import org.hornetq.core.protocol.core.impl.wireformat.SessionProducerCreditsMess
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveLargeMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendContinuationMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendLargeMessage;
+import org.hornetq.core.protocol.core.impl.wireformat.SessionSendMessage;
 import org.hornetq.spi.core.remoting.SessionContext;
 
 import static org.hornetq.core.protocol.core.impl.PacketImpl.DISCONNECT_CONSUMER;
@@ -71,16 +77,80 @@ public class HornetQSessionContext extends SessionContext
    @Override
    public void closeConsumer(final ClientConsumer consumer) throws HornetQException
    {
-      sessionChannel.sendBlocking(new SessionConsumerCloseMessage((long)consumer.getId()), PacketImpl.NULL_RESPONSE);
+      sessionChannel.sendBlocking(new SessionConsumerCloseMessage((long) consumer.getId()), PacketImpl.NULL_RESPONSE);
    }
 
    public void sendConsumerCredits(final ClientConsumer consumer, final int credits)
    {
-      sessionChannel.send(new SessionConsumerFlowCreditMessage((long)consumer.getId(), credits));
+      sessionChannel.send(new SessionConsumerFlowCreditMessage((long) consumer.getId(), credits));
    }
+
+
+   /**
+    * HornetQ does support large messages
+    *
+    * @return
+    */
+   public boolean supportsLargeMessage()
+   {
+      return true;
+   }
+
+   @Override
+   public int getCreditsOnSendingFull(MessageInternal msgI)
+   {
+      return msgI.getEncodeSize();
+   }
+
+   public void sendFullMessage(MessageInternal msgI, boolean sendBlocking, SendAcknowledgementHandler handler) throws HornetQException
+   {
+      SessionSendMessage packet = new SessionSendMessage(msgI, sendBlocking, handler);
+
+      if (sendBlocking)
+      {
+         sessionChannel.sendBlocking(packet, PacketImpl.NULL_RESPONSE);
+      }
+      else
+      {
+         sessionChannel.sendBatched(packet);
+      }
+   }
+
+   @Override
+   public int sendInitialChunkOnLargeMessage(MessageInternal msgI) throws HornetQException
+   {
+      SessionSendLargeMessage initialChunk = new SessionSendLargeMessage(msgI);
+
+      sessionChannel.send(initialChunk);
+
+      return msgI.getHeadersAndPropertiesEncodeSize();
+   }
+
+   @Override
+   public int sendLargeMessageChunk(MessageInternal msgI, long messageBodySize, boolean sendBlocking, boolean lastChunk, byte[] chunk, SendAcknowledgementHandler messageHandler) throws HornetQException
+   {
+      final boolean requiresResponse = lastChunk && sendBlocking;
+      final SessionSendContinuationMessage chunkPacket =
+         new SessionSendContinuationMessage(msgI, chunk, !lastChunk,
+                                            requiresResponse, messageBodySize, messageHandler);
+
+      if (requiresResponse)
+      {
+         // When sending it blocking, only the last chunk will be blocking.
+         sessionChannel.sendBlocking(chunkPacket, PacketImpl.NULL_RESPONSE);
+      }
+      else
+      {
+         sessionChannel.send(chunkPacket);
+      }
+
+      return chunkPacket.getPacketSize();
+   }
+
 
    /**
     * This doesn't apply to other protocols probably, so it will be a hornetq exclusive feature
+    *
     * @throws HornetQException
     */
    private void handleConsumerDisconnected(DisconnectConsumerMessage packet) throws HornetQException
@@ -91,7 +161,7 @@ public class HornetQSessionContext extends SessionContext
 
    private void handleReceivedMessagePacket(SessionReceiveMessage messagePacket) throws Exception
    {
-      ClientMessageInternal msgi = (ClientMessageInternal)messagePacket.getMessage();
+      ClientMessageInternal msgi = (ClientMessageInternal) messagePacket.getMessage();
 
       msgi.setDeliveryCount(messagePacket.getDeliveryCount());
 
@@ -102,7 +172,7 @@ public class HornetQSessionContext extends SessionContext
 
    private void handleReceiveLargeMessage(SessionReceiveLargeMessage serverPacket) throws Exception
    {
-      ClientLargeMessageInternal clientLargeMessage = (ClientLargeMessageInternal)serverPacket.getLargeMessage();
+      ClientLargeMessageInternal clientLargeMessage = (ClientLargeMessageInternal) serverPacket.getLargeMessage();
 
       clientLargeMessage.setFlowControlSize(serverPacket.getPacketSize());
 
@@ -148,7 +218,7 @@ public class HornetQSessionContext extends SessionContext
                }
                case SESS_RECEIVE_CONTINUATION:
                {
-                  handleReceiveContinuation((SessionReceiveContinuationMessage)packet);
+                  handleReceiveContinuation((SessionReceiveContinuationMessage) packet);
 
                   break;
                }
@@ -160,7 +230,7 @@ public class HornetQSessionContext extends SessionContext
                }
                case SESS_RECEIVE_LARGE_MSG:
                {
-                  handleReceiveLargeMessage((SessionReceiveLargeMessage)packet);
+                  handleReceiveLargeMessage((SessionReceiveLargeMessage) packet);
 
                   break;
                }
@@ -180,7 +250,7 @@ public class HornetQSessionContext extends SessionContext
                {
                   // We can only log these exceptions
                   // maybe we should cache it on SessionContext and throw an exception on any next calls
-                  HornetQExceptionMessage mem = (HornetQExceptionMessage)packet;
+                  HornetQExceptionMessage mem = (HornetQExceptionMessage) packet;
 
                   HornetQClientLogger.LOGGER.receivedExceptionAsynchronously(mem.getException());
 

@@ -2033,7 +2033,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
                                                                autoGroup,
                                                                groupID == null ? null : new SimpleString(groupID),
                                                                minLargeMessageSize,
-                                                               channel);
+                                                               sessionContext);
 
       addProducer(producer);
 
