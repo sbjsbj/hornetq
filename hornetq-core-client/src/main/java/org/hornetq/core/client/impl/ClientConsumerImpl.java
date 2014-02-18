@@ -26,12 +26,12 @@ import org.hornetq.api.core.HornetQInterruptedException;
 import org.hornetq.api.core.Message;
 import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientMessage;
+import org.hornetq.api.core.client.ClientSession;
 import org.hornetq.api.core.client.ClientSessionFactory;
 import org.hornetq.api.core.client.MessageHandler;
 import org.hornetq.api.core.client.ServerLocator;
 import org.hornetq.core.client.HornetQClientLogger;
 import org.hornetq.core.client.HornetQClientMessageBundle;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryResponseMessage;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionReceiveContinuationMessage;
 import org.hornetq.spi.core.remoting.SessionContext;
 import org.hornetq.utils.FutureLatch;
@@ -128,7 +128,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
    private long forceDeliveryCount;
 
-   private final SessionQueueQueryResponseMessage queueInfo;
+   private final ClientSession.QueueQuery queueInfo;
 
    private volatile boolean ackIndividually;
 
@@ -148,7 +148,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
                              final Executor executor,
                              final Executor flowControlExecutor,
                              final SessionContext sessionContext,
-                             final SessionQueueQueryResponseMessage queueInfo,
+                             final ClientSession.QueueQuery queueInfo,
                              final ClassLoader contextClassLoader)
    {
       this.id = id;
@@ -298,7 +298,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
                   HornetQClientLogger.LOGGER.trace("Forcing delivery");
                }
                // JBPAPP-6030 - Calling forceDelivery outside of the lock to avoid distributed dead locks
-               session.forceDelivery(id, forceDeliveryCount++);
+               sessionContext.forceDelivery(this, forceDeliveryCount++);
                callForceDelivery = false;
                deliveryForced = true;
                continue;
@@ -345,7 +345,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
                {
                   m.discardBody();
 
-                  session.expire(id, m.getMessageID());
+                  session.expire(this, m);
 
                   if (clientWindowSize == 0)
                   {
@@ -554,7 +554,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
    // ClientConsumerInternal implementation
    // --------------------------------------------------------------
 
-   public SessionQueueQueryResponseMessage getQueueInfo()
+   public ClientSession.QueueQuery getQueueInfo()
    {
       return queueInfo;
    }
@@ -829,7 +829,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
          flushAcks();
       }
 
-      session.individualAcknowledge(id, message.getMessageID());
+      session.individualAcknowledge(this, message);
    }
 
    public void flushAcks() throws HornetQException
@@ -1130,7 +1130,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
             }
             else
             {
-               session.expire(id, message.getMessageID());
+               session.expire(this, message);
             }
 
             // If slow consumer, we need to send 1 credit to make sure we get another message
@@ -1218,7 +1218,7 @@ public final class ClientConsumerImpl implements ClientConsumerInternal
 
       lastAckedMessage = null;
 
-      session.acknowledge(id, message.getMessageID());
+      session.acknowledge(this, message);
    }
 
    // Inner classes

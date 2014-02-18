@@ -43,6 +43,7 @@ import org.hornetq.api.core.client.ServerLocator;
 import org.hornetq.api.core.client.SessionFailureListener;
 import org.hornetq.core.client.HornetQClientLogger;
 import org.hornetq.core.client.HornetQClientMessageBundle;
+import org.hornetq.core.protocol.core.CoreRemotingConnection;
 import org.hornetq.core.protocol.core.impl.HornetQClientProtocolManager;
 import org.hornetq.core.protocol.core.impl.PacketDecoder;
 import org.hornetq.core.remoting.FailureListener;
@@ -771,7 +772,6 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
                                                             serverLocator.isCompressLargeMessage(),
                                                             serverLocator.getInitialMessagePacketSize(),
                                                             serverLocator.getGroupID(),
-                                                            connection,
                                                             context,
                                                             orderedExecutorFactory.getExecutor(),
                                                             orderedExecutorFactory.getExecutor());
@@ -867,6 +867,9 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
          return;
       }
 
+
+
+
       List<FailureListener> oldListeners = oldConnection.getFailureListeners();
 
       List<FailureListener> newListeners = new ArrayList<>(connection.getFailureListeners());
@@ -881,6 +884,10 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
       }
 
       connection.setFailureListeners(newListeners);
+
+      // This used to be done inside failover
+      // it needs to be done on the protocol
+      ((CoreRemotingConnection)connection).syncIDGeneratorSequence(((CoreRemotingConnection) oldConnection).getIDGeneratorSequence());
 
       for (ClientSessionInternal session : sessionsToFailover)
       {

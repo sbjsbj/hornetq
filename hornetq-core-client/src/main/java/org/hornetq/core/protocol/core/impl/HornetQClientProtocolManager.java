@@ -351,7 +351,7 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
 
 
       // these objects won't be null, otherwise it would keep retrying on the previous loop
-      return new HornetQSessionContext(sessionChannel, response.getServerVersion());
+      return new HornetQSessionContext(name, connection, sessionChannel, response.getServerVersion(), confirmationWindowSize);
 
    }
 

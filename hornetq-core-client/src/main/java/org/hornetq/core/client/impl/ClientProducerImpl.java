@@ -22,16 +22,11 @@ import org.hornetq.api.core.HornetQException;
 import org.hornetq.api.core.HornetQInterruptedException;
 import org.hornetq.api.core.Message;
 import org.hornetq.api.core.SimpleString;
-import org.hornetq.api.core.client.ClientMessage;
 import org.hornetq.api.core.client.SendAcknowledgementHandler;
 import org.hornetq.core.client.HornetQClientMessageBundle;
 import org.hornetq.core.message.BodyEncoder;
 import org.hornetq.core.message.impl.MessageInternal;
-import org.hornetq.core.protocol.core.Channel;
-import org.hornetq.core.protocol.core.impl.PacketImpl;
 import org.hornetq.core.protocol.core.impl.wireformat.SessionSendContinuationMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionSendLargeMessage;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionSendMessage;
 import org.hornetq.spi.core.remoting.SessionContext;
 import org.hornetq.utils.DeflaterReader;
 import org.hornetq.utils.HornetQBufferInputStream;
@@ -350,7 +345,7 @@ public class ClientProducerImpl implements ClientProducerInternal
     * @throws HornetQException
     */
    private void largeMessageSend(final boolean sendBlocking, final MessageInternal msgI,
-                    final ClientProducerCredits credits, SendAcknowledgementHandler handler) throws HornetQException
+                                 final ClientProducerCredits credits, SendAcknowledgementHandler handler) throws HornetQException
    {
       int headerSize = msgI.getHeadersAndPropertiesEncodeSize();
 
@@ -408,7 +403,7 @@ public class ClientProducerImpl implements ClientProducerInternal
     * @throws HornetQException
     */
    private void largeMessageSendServer(final boolean sendBlocking, final MessageInternal msgI,
-                          final ClientProducerCredits credits, SendAcknowledgementHandler handler) throws HornetQException
+                                       final ClientProducerCredits credits, SendAcknowledgementHandler handler) throws HornetQException
    {
       sendInitialLargeMessageHeader(msgI, credits);
 
@@ -452,6 +447,7 @@ public class ClientProducerImpl implements ClientProducerInternal
          context.close();
       }
    }
+
    /**
     * @param sendBlocking
     * @param msgI

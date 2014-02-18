@@ -1229,7 +1229,7 @@ public class MessageHeaderTest extends MessageHeaderTestBase
          return null;
       }
 
-      public BindingQuery bindingQuery(final SimpleString address) throws HornetQException
+      public AddressQuery addressQuery(final SimpleString address) throws HornetQException
       {
          return null;
       }

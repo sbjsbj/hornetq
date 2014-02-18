@@ -28,7 +28,6 @@ import org.hornetq.api.core.client.FailoverEventListener;
 import org.hornetq.api.core.client.SendAcknowledgementHandler;
 import org.hornetq.api.core.client.SessionFailureListener;
 import org.hornetq.core.client.HornetQClientLogger;
-import org.hornetq.core.protocol.core.Channel;
 import org.hornetq.spi.core.protocol.RemotingConnection;
 import org.hornetq.utils.ConcurrentHashSet;
 
@@ -95,14 +94,19 @@ public class DelegatingSession implements ClientSessionInternal
       }
    }
 
-   public void acknowledge(final long consumerID, final long messageID) throws HornetQException
+   public boolean isClosing()
    {
-      session.acknowledge(consumerID, messageID);
+      return session.isClosing();
    }
 
-   public void individualAcknowledge(final long consumerID, final long messageID) throws HornetQException
+   public void acknowledge(final ClientConsumer consumer, final Message message) throws HornetQException
    {
-      session.individualAcknowledge(consumerID, messageID);
+      session.acknowledge(consumer, message);
+   }
+
+   public void individualAcknowledge(final ClientConsumer consumer, final Message message) throws HornetQException
+   {
+      session.individualAcknowledge(consumer, message);
    }
 
    public void addConsumer(final ClientConsumerInternal consumer)
@@ -125,16 +129,10 @@ public class DelegatingSession implements ClientSessionInternal
       session.addProducer(producer);
    }
 
-   public BindingQuery bindingQuery(final SimpleString address) throws HornetQException
+   public AddressQuery addressQuery(final SimpleString address) throws HornetQException
    {
-      return session.bindingQuery(address);
+      return session.addressQuery(address);
    }
-
-   public void forceDelivery(final long consumerID, final long sequence) throws HornetQException
-   {
-      session.forceDelivery(consumerID, sequence);
-   }
-
 
    public void cleanUp(boolean failingOver) throws HornetQException
    {
@@ -345,9 +343,9 @@ public class DelegatingSession implements ClientSessionInternal
       session.end(xid, flags);
    }
 
-   public void expire(final long consumerID, final long messageID) throws HornetQException
+   public void expire(final ClientConsumer consumer, final Message message) throws HornetQException
    {
-      session.expire(consumerID, messageID);
+      session.expire(consumer, message);
    }
 
    public void forget(final Xid xid) throws XAException
@@ -489,11 +487,6 @@ public class DelegatingSession implements ClientSessionInternal
       session.removeProducer(producer);
    }
 
-   public void returnBlocking()
-   {
-      session.returnBlocking();
-   }
-
    public void rollback() throws HornetQException
    {
       session.rollback();
@@ -613,12 +606,6 @@ public class DelegatingSession implements ClientSessionInternal
    public String toString()
    {
       return "DelegatingSession [session=" + session + "]";
-   }
-
-   @Override
-   public Channel getChannel()
-   {
-      return session.getChannel();
    }
 
    @Override

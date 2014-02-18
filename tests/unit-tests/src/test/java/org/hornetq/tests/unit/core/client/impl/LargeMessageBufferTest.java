@@ -31,13 +31,13 @@ import org.hornetq.api.core.HornetQBuffers;
 import org.hornetq.api.core.HornetQException;
 import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.client.ClientMessage;
+import org.hornetq.api.core.client.ClientSession;
 import org.hornetq.api.core.client.MessageHandler;
 import org.hornetq.core.client.impl.ClientConsumerInternal;
 import org.hornetq.core.client.impl.ClientLargeMessageInternal;
 import org.hornetq.core.client.impl.ClientMessageInternal;
 import org.hornetq.core.client.impl.ClientSessionInternal;
 import org.hornetq.core.client.impl.LargeMessageControllerImpl;
-import org.hornetq.core.protocol.core.impl.wireformat.SessionQueueQueryResponseMessage;
 import org.hornetq.tests.util.RandomUtil;
 import org.hornetq.tests.util.UnitTestCase;
 import org.hornetq.utils.HornetQBufferInputStream;
@@ -911,7 +911,7 @@ public class LargeMessageBufferTest extends UnitTestCase
       {
       }
 
-      public SessionQueueQueryResponseMessage getQueueInfo()
+      public ClientSession.QueueQuery getQueueInfo()
       {
          return null;
       }
