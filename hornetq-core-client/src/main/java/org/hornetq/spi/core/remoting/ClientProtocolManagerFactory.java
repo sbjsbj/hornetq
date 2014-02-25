@@ -12,10 +12,12 @@
  */
 package org.hornetq.spi.core.remoting;
 
+import org.hornetq.core.client.impl.ClientSessionFactoryInternal;
+
 /**
  * @author Clebert Suconic
  */
 public interface ClientProtocolManagerFactory
 {
-   ClientProtocolManager newProtocolManager();
+   ClientProtocolManager newProtocolManager(ClientSessionFactoryInternal factoryInternal);
 }

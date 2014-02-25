@@ -27,6 +27,7 @@ import org.hornetq.api.core.SimpleString;
 import org.hornetq.api.core.TransportConfiguration;
 import org.hornetq.core.client.HornetQClientLogger;
 import org.hornetq.core.client.HornetQClientMessageBundle;
+import org.hornetq.core.client.impl.ClientSessionFactoryInternal;
 import org.hornetq.core.protocol.ClientPacketDecoder;
 import org.hornetq.core.protocol.core.Channel;
 import org.hornetq.core.protocol.core.ChannelHandler;
@@ -66,6 +67,8 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
 {
    private final int versionID = VersionLoader.getVersion().getIncrementingVersion();
 
+   private final ClientSessionFactoryInternal factoryInternal;
+
    /**
     * Guards assignments to {@link #inCreateSession} and {@link #inCreateSessionLatch}
     */
@@ -86,10 +89,6 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
 
    protected volatile RemotingConnectionImpl connection;
 
-   protected volatile Channel channel0;
-
-   protected volatile Channel channel1;
-
    protected ProtocolResponseHandler callbackHandler;
 
    /**
@@ -97,9 +96,15 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
     */
    private volatile boolean alive = true;
 
-   private final Object failoverLock = new Object();
-
    private final CountDownLatch waitLatch = new CountDownLatch(1);
+
+
+
+   public HornetQClientProtocolManager(ClientSessionFactoryInternal factory)
+   {
+      this.factoryInternal = factory;
+   }
+
 
    public void replacePacketDecoder(PacketDecoder decoder)
    {
@@ -113,7 +118,14 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
 
    public Channel getChannel0()
    {
-      return channel0;
+      if (connection == null)
+      {
+         return null;
+      }
+      else
+      {
+         return connection.getChannel(0, -1);
+      }
    }
 
    public RemotingConnection getCurrentConnection()
@@ -124,21 +136,29 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
 
    public Channel getChannel1()
    {
-      return channel1;
+      if (connection == null)
+      {
+         return null;
+      }
+      else
+      {
+         return connection.getChannel(1, -1);
+      }
    }
 
    public Lock lockSessionCreation()
    {
       try
       {
-         synchronized (failoverLock)
+         Lock localFailoverLock = factoryInternal.lockFailover();
+         try
          {
             if (connection == null)
             {
                return null;
             }
 
-            Lock lock = channel1.getLock();
+            Lock lock = getChannel1().getLock();
 
             // Lock it - this must be done while the failoverLock is held
             while (isAlive() && !lock.tryLock(100, TimeUnit.MILLISECONDS))
@@ -146,7 +166,12 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
             }
 
             return lock;
-         } // We can now release the failoverLock
+         }
+         finally
+         {
+            localFailoverLock.unlock();
+         }
+          // We can now release the failoverLock
       }
       catch (InterruptedException e)
       {
@@ -169,6 +194,7 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
       forceReturnChannel1();
 
 
+      Channel channel1 = getChannel1();
       if (channel1 != null)
       {
          channel1.returnBlocking();
@@ -184,16 +210,10 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
    }
 
 
-   public HornetQClientProtocolManager()
-   {
-   }
-
 
    public void setConnection(RemotingConnection connection)
    {
       this.connection = (RemotingConnectionImpl) connection;
-      channel0 = this.connection.getChannel(0, -1);
-      channel1 = this.connection.getChannel(1, -1);
    }
 
    @Override
@@ -217,14 +237,14 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
    {
       this.callbackHandler = handler;
 
-      channel0.setHandler(new Channel0Handler(connection));
+      getChannel0().setHandler(new Channel0Handler(connection));
    }
 
 
    @Override
    public void sendSubscribeTopology(final boolean isServer)
    {
-      channel0.send(new SubscribeClusterTopologyUpdatesMessageV2(isServer,
+      getChannel0().send(new SubscribeClusterTopologyUpdatesMessageV2(isServer,
                                                                  VersionLoader.getVersion()
                                                                     .getIncrementingVersion()));
    }
@@ -232,7 +252,7 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
    public void sendNodeAnnounce(final long currentEventID, final String nodeID, final String nodeName,
                                 final boolean isBackup, final TransportConfiguration config, final TransportConfiguration backupConfig)
    {
-      channel0.send(new NodeAnnounceMessage(currentEventID, nodeID, nodeName, isBackup, config, backupConfig));
+      getChannel0().send(new NodeAnnounceMessage(currentEventID, nodeID, nodeName, isBackup, config, backupConfig));
    }
 
    @Override
@@ -244,6 +264,7 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
          throw HornetQClientMessageBundle.BUNDLE.clientSessionClosed();
 
       Channel sessionChannel = null;
+      Channel channel1;
       CreateSessionResponseMessage response = null;
 
       boolean retry;

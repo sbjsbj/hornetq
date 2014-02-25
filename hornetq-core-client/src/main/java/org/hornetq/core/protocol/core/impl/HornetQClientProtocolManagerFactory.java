@@ -13,6 +13,7 @@
 
 package org.hornetq.core.protocol.core.impl;
 
+import org.hornetq.core.client.impl.ClientSessionFactoryInternal;
 import org.hornetq.spi.core.remoting.ClientProtocolManager;
 import org.hornetq.spi.core.remoting.ClientProtocolManagerFactory;
 
@@ -22,8 +23,8 @@ import org.hornetq.spi.core.remoting.ClientProtocolManagerFactory;
 
 public class HornetQClientProtocolManagerFactory implements ClientProtocolManagerFactory
 {
-   public ClientProtocolManager newProtocolManager()
+   public ClientProtocolManager newProtocolManager(ClientSessionFactoryInternal factoryInternal)
    {
-      return new HornetQClientProtocolManager();
+      return new HornetQClientProtocolManager(factoryInternal);
    }
 }

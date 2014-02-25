@@ -22,11 +22,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.hornetq.api.core.HornetQBuffer;
 import org.hornetq.api.core.HornetQException;
@@ -75,7 +76,7 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
 
 
    // TODO use the factory here
-   protected ClientProtocolManager clientProtocolManager = new HornetQClientProtocolManager();
+   protected ClientProtocolManager clientProtocolManager = new HornetQClientProtocolManager(this);
 
    // Constants
    // ------------------------------------------------------------------------------------
@@ -108,7 +109,10 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
    private final Set<ClientSessionInternal> sessions = new HashSet<ClientSessionInternal>();
 
    private final Object createSessionLock = new Object();
-   private final Object failoverLock = new Object();
+
+   private final Lock newFailoverLock = new ReentrantLock();
+
+
    private final Object connectionLock = new Object();
 
    private final ExecutorFactory orderedExecutorFactory;
@@ -138,22 +142,6 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
    private Future<?> pingerFuture;
    private PingRunnable pingRunnable;
 
-   /**
-    * Flag that signals that the factory is closing. Causes many processes to exit.
-    */
-   private volatile boolean exitLoop;
-   /**
-    * Guards assignments to {@link #inCreateSession} and {@link #inCreateSessionLatch}
-    */
-   private final Object inCreateSessionGuard = new Object();
-   /**
-    * Flag that tells whether we are trying to create a session.
-    */
-   private boolean inCreateSession;
-   /**
-    * Used to wait for the creation of a session.
-    */
-   private CountDownLatch inCreateSessionLatch;
 
    private final List<Interceptor> incomingInterceptors;
 
@@ -164,8 +152,6 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
    private volatile boolean closed;
 
    public final Exception createTrace;
-
-   private final CountDownLatch waitLatch = new CountDownLatch(1);
 
    public static final Set<CloseRunnable> CLOSE_RUNNABLES = Collections.synchronizedSet(new HashSet<CloseRunnable>());
 
@@ -248,6 +234,12 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
    public void disableFinalizeCheck()
    {
       finalizeCheck = false;
+   }
+
+   public Lock lockFailover()
+   {
+      newFailoverLock.lock();
+      return newFailoverLock;
    }
 
    public void connect(final int initialConnectAttempts, final boolean failoverOnInitialConnection) throws HornetQException
@@ -588,7 +580,8 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
       Set<ClientSessionInternal> sessionsToClose = null;
       if (!clientProtocolManager.isAlive())
          return;
-      synchronized (failoverLock)
+      Lock localFailoverLock = lockFailover();
+      try
       {
          if (connection == null || !connection.getID().equals(connectionID) || !clientProtocolManager.isAlive())
          {
@@ -704,6 +697,10 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
             callFailoverListeners(FailoverEventType.FAILOVER_FAILED);
             callSessionFailureListeners(me, true, false);
          }
+      }
+      finally
+      {
+         localFailoverLock.unlock();
       }
 
       // This needs to be outside the failover lock to prevent deadlock

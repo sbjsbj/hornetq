@@ -87,6 +87,7 @@ public class ReplicatedFailoverTest extends FailoverTest
          sf.close();
       }
    }
+
    @Override
    protected void createConfigs() throws Exception
    {
