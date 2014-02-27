@@ -575,6 +575,11 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
       }
    }
 
+   /**
+    * TODO: Maybe this belongs to HornetQClientProtocolManager
+    * @param connectionID
+    * @param me
+    */
    private void failoverOrReconnect(final Object connectionID, final HornetQException me)
    {
       Set<ClientSessionInternal> sessionsToClose = null;
