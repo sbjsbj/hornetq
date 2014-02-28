@@ -264,7 +264,6 @@ public class HornetQClientProtocolManager implements ClientProtocolManager
          throw HornetQClientMessageBundle.BUNDLE.clientSessionClosed();
 
       Channel sessionChannel = null;
-      Channel channel1;
       CreateSessionResponseMessage response = null;
 
       boolean retry;

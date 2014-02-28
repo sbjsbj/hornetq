@@ -1030,6 +1030,45 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
       }
    }
 
+   public RemotingConnection getConnection()
+   {
+      if (closed)
+         throw new IllegalStateException("ClientSessionFactory is closed!");
+      if (!clientProtocolManager.isAlive())
+         return null;
+      synchronized (connectionLock)
+      {
+         if (connection != null)
+         {
+            // a connection already exists, so returning the same one
+            return connection;
+         }
+         else
+         {
+            connection = establishNewConnection();
+
+            if (serverLocator.getTopology() != null)
+            {
+               if (connection != null)
+               {
+                  if (ClientSessionFactoryImpl.isTrace)
+                  {
+                     HornetQClientLogger.LOGGER.trace(this + "::Subscribing Topology");
+                  }
+                  clientProtocolManager.sendSubscribeTopology(serverLocator.isClusterConnection());
+               }
+            }
+            else
+            {
+               HornetQClientLogger.LOGGER.debug("serverLocator@" + System.identityHashCode(serverLocator + " had no topology"));
+            }
+
+            return connection;
+         }
+      }
+   }
+
+
    protected void schedulePing()
    {
       if (clientFailureCheckPeriod != -1)
@@ -1318,6 +1357,10 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
          {
             theConn.bufferReceived(connectionID, buffer);
          }
+         else
+         {
+            HornetQClientLogger.LOGGER.debug("TheConn == null on ClientSessionFactoryImpl::DelegatingBufferHandler, ignoring packet");
+         }
       }
    }
 
@@ -1430,27 +1473,6 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
    }
 
 
-   public RemotingConnection getConnection()
-   {
-      if (closed)
-         throw new IllegalStateException("ClientSessionFactory is closed!");
-      if (!clientProtocolManager.isAlive())
-         return null;
-      synchronized (connectionLock)
-      {
-         if (connection != null)
-         {
-            // a connection already exists, so returning the same one
-            return connection;
-         }
-         else
-         {
-            connection = establishNewConnection();
-            return connection;
-         }
-      }
-   }
-
    protected RemotingConnection establishNewConnection()
    {
       Connection transportConnection = createTransportConnection();
@@ -1472,15 +1494,6 @@ public class ClientSessionFactoryImpl implements ClientSessionFactoryInternal, C
       newConnection.addFailureListener(new DelegatingFailureListener(newConnection.getID()));
 
       schedulePing();
-
-      if (serverLocator.getTopology() != null)
-      {
-         if (ClientSessionFactoryImpl.isTrace)
-         {
-            HornetQClientLogger.LOGGER.trace(this + "::Subscribing Topology");
-         }
-         clientProtocolManager.sendSubscribeTopology(serverLocator.isClusterConnection());
-      }
 
       if (serverLocator.getAfterConnectInternalListener() != null)
       {
